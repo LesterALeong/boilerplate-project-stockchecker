@@ -1,31 +1,36 @@
-const Mocha = require('mocha');
-
-let mocha = new Mocha({
-  timeout: 5000
-});
-
-// Add our functional tests file
-mocha.addFile('./tests/2_functional-tests.js');
+const Mocha = require("mocha");
 
 let report = [];
 
+// We will create a fresh Mocha instance each time run() is called.
 function run() {
-  const runner = mocha.run(function () {
-    // no-op
+  report = []; // reset between runs
+
+  const mocha = new Mocha({
+    timeout: 5000,
+    ui: "bdd", // <-- this is critical so `suite`, `test`, etc. are defined
   });
 
-  runner.on('test end', function (test) {
-    // push test results so /_api/get-tests can see them
+  // Add our functional tests
+  mocha.addFile("./tests/2_functional-tests.js");
+
+  const runner = mocha.run(function () {
+    // done callback (we don't need to do anything here)
+  });
+
+  // As each test ends, push results so FCC can read them later
+  runner.on("test end", function (test) {
     report.push({
       title: test.title,
       fullTitle: test.fullTitle(),
       duration: test.duration,
-      state: test.state
+      state: test.state,
     });
   });
 
-  runner.on('end', function () {
-    // done
+  runner.on("end", function () {
+    // all tests finished
+    // we don't need to do anything else here
   });
 
   return runner;
@@ -33,5 +38,5 @@ function run() {
 
 module.exports = {
   run,
-  report
+  report,
 };
