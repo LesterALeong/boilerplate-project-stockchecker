@@ -12,71 +12,67 @@ const path = require("path");
 
 const app = express();
 
-// This is our canonical CSP string. We'll reuse it everywhere.
-const CSP_STRING = "default-src 'self'; script-src 'self'; style-src 'self'";
-
 /*
  * SECURITY / CSP
  *
- * 1. Helmet to set CSP normally
- * 2. Manual header set to guarantee Content-Security-Policy exists
- *    (some sandboxes/proxies strip Helmet headers or rename them)
- * 3. We'll expose /csp.json so FCC can read our CSP over JSON
- * 4. index.html will embed the same CSP_STRING in a <script type="application/json">
+ * FCC expects a Content-Security-Policy that only allows scripts and styles
+ * to load from 'self'. The standard FCC solution is to use Helmet exactly
+ * like this, and *not* add custom CSP headers.
+ *
+ * We put this FIRST so it applies to all routes.
+ *
+ * NOTE: We intentionally only define scriptSrc and styleSrc here because
+ * that's what FCC checks for: no external scripts or styles.
  */
 app.use(
   helmet.contentSecurityPolicy({
     directives: {
-      defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
       styleSrc: ["'self'"],
     },
   })
 );
 
-// Force-set header in a very explicit/lowercase-friendly way
-app.use((req, res, next) => {
-  res.setHeader("Content-Security-Policy", CSP_STRING);
-  // also mirror in lowercase for ultra-paranoid FCC header lookups
-  res.setHeader("content-security-policy", CSP_STRING);
-  next();
-});
-
-// Endpoint FCC (or you) can hit to inspect CSP without relying on headers
-app.get("/csp.json", (req, res) => {
-  res.json({ csp: CSP_STRING });
-});
-
-// CORS for FCC tests
+// FCC tests assume permissive CORS for their runner
 app.use(cors({ origin: "*" }));
 
-// so req.ip is stable behind CodeSandbox / FCC proxies
+// So req.ip is stable behind sandbox / proxy
 app.enable("trust proxy");
 
-// static assets
+// Static assets
 app.use("/public", express.static(path.join(process.cwd(), "public")));
 
-// body parsing
+// Body parsing
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// index page
+// Index page
 app.get("/", function (req, res) {
   res.sendFile(path.join(process.cwd(), "views", "index.html"));
 });
 
-// FCC helper routes (/ _api/get-tests, etc.)
+// FCC testing helper routes (/_api/get-tests etc.)
 fccTestingRoutes(app);
 
-// API route
+// Our API route (/api/stock-prices)
 apiRoutes(app);
 
-// 404
+// 404 handler
 app.use(function (req, res, next) {
   res.status(404).type("text").send("Not Found");
 });
 
-// default NODE_ENV to test so we always run mocha and populate report
+/*
+ * TEST RUNNER INTEGRATION
+ *
+ * FCC's final test (#7) will GET /_api/get-tests from your live URL and expects
+ * to see all functional tests passing.
+ *
+ * We:
+ *  - ensure NODE_ENV='test' so we always actually run the tests
+ *  - run mocha once right after the server starts listening
+ *  - expose the results via /_api/get-tests (see routes/fcctesting.js)
+ */
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = "test";
 }
@@ -85,8 +81,10 @@ if (!process.env.NODE_ENV) {
 const listener = app.listen(process.env.PORT || 3000, function () {
   const port = listener.address() && listener.address().port;
   console.log("Listening on port " + (port || process.env.PORT));
-  console.log("Running Tests...");
 
+  // Run tests immediately once the server is live.
+  // This allows chai-http in the tests to hit our running app.
+  console.log("Running Tests...");
   try {
     runner.run();
   } catch (e) {

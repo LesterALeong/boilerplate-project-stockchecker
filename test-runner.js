@@ -2,24 +2,20 @@ const Mocha = require("mocha");
 
 let report = [];
 
-// fresh run each time
 function run() {
-  report = []; // reset so we don't accumulate on restart
+  report = []; // reset on each run
 
-  // IMPORTANT: use 'tdd' so `suite` / `test` are defined
   const mocha = new Mocha({
     timeout: 5000,
     ui: "tdd",
   });
 
-  // add our functional test file
   mocha.addFile("./tests/2_functional-tests.js");
 
   const runner = mocha.run(function () {
-    // mocha finished
+    // done
   });
 
-  // collect results for /_api/get-tests
   runner.on("test end", function (test) {
     report.push({
       title: test.title,
@@ -30,7 +26,7 @@ function run() {
   });
 
   runner.on("end", function () {
-    // all tests complete
+    // finished
   });
 
   return runner;
