@@ -2,23 +2,24 @@ const Mocha = require("mocha");
 
 let report = [];
 
-// We will create a fresh Mocha instance each time run() is called.
+// fresh run each time
 function run() {
-  report = []; // reset between runs
+  report = []; // reset so we don't accumulate on restart
 
+  // IMPORTANT: use 'tdd' so `suite` / `test` are defined
   const mocha = new Mocha({
     timeout: 5000,
-    ui: "bdd", // <-- this is critical so `suite`, `test`, etc. are defined
+    ui: "tdd",
   });
 
-  // Add our functional tests
+  // add our functional test file
   mocha.addFile("./tests/2_functional-tests.js");
 
   const runner = mocha.run(function () {
-    // done callback (we don't need to do anything here)
+    // mocha finished
   });
 
-  // As each test ends, push results so FCC can read them later
+  // collect results for /_api/get-tests
   runner.on("test end", function (test) {
     report.push({
       title: test.title,
@@ -29,8 +30,7 @@ function run() {
   });
 
   runner.on("end", function () {
-    // all tests finished
-    // we don't need to do anything else here
+    // all tests complete
   });
 
   return runner;
