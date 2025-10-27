@@ -25,7 +25,7 @@ app.use(
   })
 );
 
-// Manually assert CSP header for FCC tests
+// Explicitly set CSP header (some hosts/proxies strip Helmet headers)
 app.use((req, res, next) => {
   res.setHeader(
     "Content-Security-Policy",
@@ -34,28 +34,28 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS for FCC tests
+// CORS (FCC tests assume permissive CORS is OK)
 app.use(cors({ origin: "*" }));
 
-// So req.ip is correct behind proxy/sandbox
+// so req.ip is stable behind proxy
 app.enable("trust proxy");
 
-// Static assets
+// static assets
 app.use("/public", express.static(path.join(process.cwd(), "public")));
 
-// Body parsing
+// body parsing
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
-// Index page
+// index page
 app.get("/", function (req, res) {
   res.sendFile(path.join(process.cwd(), "views", "index.html"));
 });
 
-// FCC testing helper routes
+// FCC helper routes (/ _api/get-tests, etc.)
 fccTestingRoutes(app);
 
-// Our API
+// API
 apiRoutes(app);
 
 // 404
@@ -63,22 +63,25 @@ app.use(function (req, res, next) {
   res.status(404).type("text").send("Not Found");
 });
 
-// Ensure tests always run so /_api/get-tests returns data
+// Force NODE_ENV to 'test' so mocha runs even in hosted preview
 if (!process.env.NODE_ENV) {
   process.env.NODE_ENV = "test";
 }
 
+// start server
 const listener = app.listen(process.env.PORT || 3000, function () {
-  console.log("Listening on port " + listener.address().port);
-  console.log("Running Tests...");
-  setTimeout(function () {
-    try {
-      runner.run();
-    } catch (e) {
-      console.log("Tests are not valid:");
-      console.log(e);
-    }
-  }, 500);
+  const port = listener.address() && listener.address().port;
+  console.log("Listening on port " + (port || process.env.PORT));
+
+  // Immediately run tests now that server is listening.
+  // No timeout, so /_api/get-tests will have data ASAP.
+  try {
+    console.log("Running Tests...");
+    runner.run();
+  } catch (e) {
+    console.log("Tests are not valid:");
+    console.log(e);
+  }
 });
 
 module.exports = app;
