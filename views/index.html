@@ -2,11 +2,11 @@
 <html>
   <head>
     <title>Stock Price Checker</title>
+    <meta name="description" content="freeCodeCamp Stock Price Checker" />
     <link
-      id="favicon"
-      rel="icon"
-      href="https://cdn.freecodecamp.org/universal/favicons/favicon-32x32.png"
-      type="image/x-icon"
+      rel="shortcut icon"
+      href="https://nesh.gq/icon.png"
+      type="icon/png"
     />
     <meta charset="utf-8" />
     <meta http-equiv="X-UA-Compatible" content="IE=edge" />
@@ -14,47 +14,48 @@
     <link rel="stylesheet" href="./public/style.css" />
   </head>
   <body>
-    <header>
-      <h1>ISQA_5 - Nasdaq Stock Price Checker</h1>
-    </header>
-    <div id="userstories">
-      <h3>Example usage:</h3>
-      <code>/api/stock-prices?stock=GOOG</code>
-      <br />
-      <code>/api/stock-prices?stock=GOOG&amp;like=true</code>
-      <br />
-      <code>/api/stock-prices?stock=GOOG&amp;stock=MSFT</code>
-      <br />
-      <code>/api/stock-prices?stock=GOOG&amp;stock=MSFT&amp;like=true</code>
-      <br />
-      <h3>Example return:</h3>
-      <code>{"stockData":{"stock":"GOOG","price":786.90,"likes":1}}</code>
-      <br />
-      <code>
-        {"stockData":[{"stock":"MSFT","price":62.30,"rel_likes":-1},{"stock":"GOOG","price":786.90,"rel_likes":1}]}
-      </code>
+    <div id="mainContainer">
+      <h1>Stock Price Checker</h1>
+    <h4>Get single price and total likes</h4>
+    <form
+      action="/api/stock-prices"
+      method="GET"
+      id="testForm2"
+      class="border"
+    >
+      <input
+        type="text"
+        name="stock"
+        placeholder="goog"
+        required=""
+      />
+      <input type="checkbox" name="like" value="true" /> Like?<br />
+      <button type="submit">Get Price!</button>
+    </form>
+    <h4>Compare and get relative likes</h4>
+    <form
+      action="/api/stock-prices"
+      method="GET"
+      id="testForm"
+      class="border"
+    >
+      <input
+        type="text"
+        name="stock"
+        placeholder="goog"
+        required=""
+      />
+      <input
+        type="text"
+        name="stock"
+        placeholder="msft"
+        required=""
+      />
+      <input type="checkbox" name="like" value="true" /> Like both?<br />
+      <button type="submit">Get Price!</button>
+    </form>
+      <p>by <a href="https://nesh.gq">Ganesh H</a></p>
     </div>
-    <hr class="p-50" />
-    <div id="testui">
-      <h2 class="text-align-left">Front-End:</h2>
-      <h3>Get single price and total likes</h3>
-      <form id="testForm2" class="border">
-        <input type="text" name="stock" placeholder="GOOG" required="" />
-        <input type="checkbox" name="like" value="true" /> Like?
-        <br />
-        <button type="submit">Get Price!</button>
-      </form>
-      <h3>Compare and get relative likes</h3>
-      <form id="testForm" class="border">
-        <input type="text" name="stock" placeholder="GOOG" required="" />
-        <input type="text" name="stock" placeholder="MSFT" required="" />
-        <input type="checkbox" name="like" value="true" /> Like both?
-        <br />
-        <button type="submit">Get Price!</button>
-      </form>
-      <code id="jsonResult"></code>
-    </div>
-    <hr class="m-50 mt-200" />
-    <script src="/public/script.js"></script>
   </body>
+  
 </html>
