@@ -1,39 +1,30 @@
-"use strict";
+'use strict';
 
-const path = require("path");
-const fs = require("fs");
-const testRunner = require("../test-runner.js");
+const path = require('path');
+const fs = require('fs');
+const testRunner = require('../test-runner.js');
 
-// We'll keep a cached copy of the last non-empty report so that
-// we can serve it even if FCC asks before mocha finishes.
+// cache the last known non-empty mocha report
 let lastReport = [];
 
 module.exports = function (app) {
-  // basic info for FCC
-  app.route("/_api/app-info").get(function (req, res) {
-    const packageJson = path.join(process.cwd(), "package.json");
-    fs.readFile(packageJson, "utf-8", function (err, data) {
-      if (err) return res.json({ error: "package.json not found" });
+  // Basic info endpoint FCC expects
+  app.route('/_api/app-info').get(function (req, res) {
+    const packageJson = path.join(process.cwd(), 'package.json');
+    fs.readFile(packageJson, 'utf-8', function (err, data) {
+      if (err) return res.json({ error: 'package.json not found' });
       const pkg = JSON.parse(data);
       res.json({
-        version: pkg.version,
+        version: pkg.version
       });
     });
   });
 
   /*
-   * FCC Debug / Status Endpoints
-   *
-   * 1. /_api/get-tests
-   *    -> returns mocha's individual test results
-   *
-   * 2. /__fcc-status
-   *    -> returns a summary flag indicating whether ALL functional tests
-   *       completed and passed. FCC's final test #7 cares about this.
+   * FCC calls this to read your functional test results.
+   * We always return the last non-empty report once mocha has run.
    */
-
-  // raw mocha-style detail (matches FCC's original boilerplate behavior)
-  app.route("/_api/get-tests").get(function (req, res) {
+  app.route('/_api/get-tests').get(function (req, res) {
     if (Array.isArray(testRunner.report) && testRunner.report.length > 0) {
       lastReport = testRunner.report;
     }
@@ -41,21 +32,25 @@ module.exports = function (app) {
     if (Array.isArray(lastReport) && lastReport.length > 0) {
       return res.json(lastReport);
     } else {
+      // respond with empty array if mocha TRULY hasn't completed yet,
+      // but after first warm boot on Render this should stick.
       return res.json([]);
     }
   });
 
-  // summarized status for FCC final check (#7)
-  app.route("/__fcc-status").get(function (req, res) {
-    // We stored a getter for the allPassedFlag on the app in server.js
-    const getAllPassed = app.get("__all_tests_passed_flag__");
-    const allPassed =
-      typeof getAllPassed === "function" ? !!getAllPassed() : false;
+  /*
+   * Extra status endpoint (mainly for debugging yourself, not FCC):
+   * shows if we think all tests have passed.
+   */
+  app.route('/__fcc-status').get(function (req, res) {
+    const getAllPassed = app.get('__all_tests_passed_flag__');
+    const allPassed = typeof getAllPassed === 'function'
+      ? !!getAllPassed()
+      : false;
 
-    // Also compute pass/fail from the report in case FCC wants to double-check:
     let computedAllPassed = false;
     if (Array.isArray(testRunner.report) && testRunner.report.length > 0) {
-      const anyFail = testRunner.report.some((r) => r.state !== "passed");
+      const anyFail = testRunner.report.some(r => r.state !== 'passed');
       computedAllPassed = !anyFail;
     }
 
@@ -64,7 +59,7 @@ module.exports = function (app) {
       allTestsPassedComputed: computedAllPassed,
       testCount: Array.isArray(testRunner.report)
         ? testRunner.report.length
-        : 0,
+        : 0
     });
   });
 };
