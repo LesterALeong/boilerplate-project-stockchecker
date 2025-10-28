@@ -1,146 +1,111 @@
-"use strict";
+'use strict';
 
-const express = require("express");
-const bodyParser = require("body-parser");
-const cors = require("cors");
-const helmet = require("helmet");
+const express = require('express');
+const bodyParser = require('body-parser');
+const cors = require('cors');
 
-const apiRoutes = require("./routes/api.js");
-const fccTestingRoutes = require("./routes/fcctesting.js");
-const runner = require("./test-runner.js");
-const path = require("path");
+const apiRoutes = require('./routes/api.js');
+const fccTestingRoutes = require('./routes/fcctesting.js');
+const runner = require('./test-runner.js');
+const path = require('path');
 
 const app = express();
 
 /*
- * FCC SECURITY REQUIREMENT (Test #2)
+ * === CSP MIDDLEWARE FOR FCC TEST #2 ===
  *
- * Helmet will generate a Content-Security-Policy header with only 'self'
- * for scriptSrc and styleSrc. This matches FCC's requirement.
+ * FCC wants "only allow loading of scripts and CSS from your server".
+ * We'll enforce:
+ *   default-src 'self'; script-src 'self'; style-src 'self'
  *
- * Some hosts / proxies in front of the user's project can strip or mangle
- * security headers. FCC's browser test then fails because it doesn't
- * see the header.
+ * We will:
+ *  - NOT use helmet.contentSecurityPolicy anymore
+ *  - Manually set the header on *every* response
+ *  - Set it twice: once as `Content-Security-Policy`, once as `content-security-policy`
  *
- * To make the CSP verifiable even if the proxy strips headers, we:
- *   1. Configure helmet.contentSecurityPolicy normally (this sets
- *      Content-Security-Policy on the real response).
- *   2. Capture the exact directive string in res.locals.cspHeader.
- *   3. Expose it at GET /__csp-header so FCC (or we) can read it
- *      without relying on proxy-forwarded headers.
- *
- * FCC still primarily checks the response header, but this gives
- * another stable surface for their runtime to assert against.
+ * This is intentionally redundant because FCC's test runner is looking
+ * for `content-security-policy` in lowercase and was not seeing the
+ * header set by Helmet in prior attempts.
  */
+const CSP_VALUE = "default-src 'self'; script-src 'self'; style-src 'self'";
 
-const cspDirectives = {
-  scriptSrc: ["'self'"],
-  styleSrc: ["'self'"],
-};
-
-app.use(
-  helmet.contentSecurityPolicy({
-    directives: cspDirectives,
-  })
-);
-
-// middleware to stash the CSP header for later verification
 app.use((req, res, next) => {
-  // Helmet will set the final header on the response later,
-  // but we can synthesize exactly what it's supposed to be.
-  // We build a string that looks like:
-  // "script-src 'self'; style-src 'self'"
-  const scriptPart = "script-src 'self'";
-  const stylePart = "style-src 'self'";
-  const synthesized = scriptPart + "; " + stylePart;
-
-  // stash this so we can serve it at /__csp-header
-  res.locals.__csp_header = synthesized;
-
+  res.setHeader('Content-Security-Policy', CSP_VALUE);
+  res.setHeader('content-security-policy', CSP_VALUE);
   next();
 });
 
-// allow FCC test runner to reach us
-app.use(cors({ origin: "*" }));
+// allow FCC's test runner to hit us from anywhere
+app.use(cors({ origin: '*' }));
 
-// make req.ip meaningful behind proxy
-app.enable("trust proxy");
+// so req.ip is meaningful behind proxy (Render sets X-Forwarded-For)
+app.enable('trust proxy');
 
 // static assets
-app.use("/public", express.static(path.join(process.cwd(), "public")));
+app.use('/public', express.static(path.join(process.cwd(), 'public')));
 
 // body parsing
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
 // index page
-app.get("/", function (req, res) {
-  res.sendFile(path.join(process.cwd(), "views", "index.html"));
+app.get('/', function (req, res) {
+  res.sendFile(path.join(process.cwd(), 'views', 'index.html'));
 });
 
-// diagnostic route for CSP (for FCC Test #2 fallback)
-// returns whatever CSP we believe we are enforcing
-app.get("/__csp-header", function (req, res) {
-  // res.locals is per-request, but our middleware above always set it,
-  // so just echo it back.
-  res.json({
-    csp: res.locals.__csp_header || null,
-  });
-});
-
-// FCC helper routes (/ _api/get-tests etc.)
+// FCC testing helper routes (/_api/get-tests etc.)
 fccTestingRoutes(app);
 
-// core API
+// API route for /api/stock-prices
 apiRoutes(app);
 
-// 404
+// 404 handler
 app.use(function (req, res, next) {
-  res.status(404).type("text").send("Not Found");
+  res.status(404).type('text').send('Not Found');
 });
 
 /*
- * TEST RUNNER INTEGRATION (FCC Test #7)
+ * === TEST RUNNER FOR FCC TEST #7 ===
  *
- * We run mocha once on startup, collect results in test-runner.js,
- * and we also cache a boolean "allTestsPassed" which we expose in
- * routes/fcctesting.js at /__fcc-status.
+ * We force NODE_ENV='test' so the functional tests run automatically
+ * every time the server boots on Render. We then expose those results
+ * through /_api/get-tests.
  *
- * This helps FCC confirm #7 in case their first request races the
- * mocha run or hits a warm instance.
+ * Important: FCC sometimes hits your URL immediately after boot.
+ * We capture the mocha results in memory so that after the first run
+ * they are always available.
  */
 
 if (!process.env.NODE_ENV) {
-  process.env.NODE_ENV = "test";
+  process.env.NODE_ENV = 'test';
 }
 
-// this flag will be flipped true when mocha reports all tests passed
+// we'll flip this to true once mocha finishes AND everything is passed
 let allPassedFlag = false;
 
-// run tests after server starts listening
 const listener = app.listen(process.env.PORT || 3000, function () {
   const port = listener.address() && listener.address().port;
-  console.log("Listening on port " + (port || process.env.PORT));
-  console.log("Running Tests...");
+  console.log('Listening on port ' + (port || process.env.PORT));
+  console.log('Running Tests...');
 
   try {
     const mochaRunner = runner.run();
 
-    mochaRunner.on("end", function () {
-      // check that every test in runner.report has state === 'passed'
-      const anyFail = runner.report.some((r) => r.state !== "passed");
-      if (!anyFail && runner.report.length > 0) {
+    mochaRunner.on('end', function () {
+      // If any test failed, state will not be 'passed'
+      const anyFailed = runner.report.some(r => r.state !== 'passed');
+      if (!anyFailed && runner.report.length > 0) {
         allPassedFlag = true;
       }
-      console.log("Mocha finished. allPassedFlag=", allPassedFlag);
+      console.log('Mocha finished. allPassedFlag=', allPassedFlag);
     });
   } catch (e) {
-    console.log("Tests are not valid:");
+    console.log('Tests are not valid:');
     console.log(e);
   }
 });
 
-// expose this so routes/fcctesting.js can read it
-app.set("__all_tests_passed_flag__", () => allPassedFlag);
+// make that status visible to fcctesting.js
+app.set('__all_tests_passed_flag__', () => allPassedFlag);
 
 module.exports = app;
